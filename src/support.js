@@ -116,66 +116,69 @@ var Promise = undefined;
             promise['[[Process]]'].concat(promise['[[Monitor]]']).forEach(function(i) {
                 i(status, value);
             });
+            promise['[[Process]]'].forEach(function(i) {
+                setTimeout(function() {
+                    i.next(status, value);
+                });
+            });
             promise['[[Process]]'].length = promise['[[Monitor]]'].length = 0;
         };
         // 异步完成
         var PromiseComplete = function(status, value) {
-            if (this['[[PromiseStatus]]'] !== 'pending') {
+            var me = this;
+            if (me['[[PromiseStatus]]'] !== 'pending') {
                 return;
             }
             //更改回调值
-            this['[[PromiseValue]]'] = value;
-            this['[[PromiseStatus]]'] = status;
-            PromiseExec(this);
+            me['[[PromiseValue]]'] = value;
+            me['[[PromiseStatus]]'] = status;
+            PromiseExec(me);
+        };
+        // then回调壳子
+        var PromiseShell = function(status, value) {
+            if (typeof this[status] === 'function') {
+                return this.result = this[status](value);
+            };
+        };
+        // next回调壳子
+        var PromiseNext = function(callbacks, status, value) {
+            if ('result' in this) {
+                var result = this.result;
+                if (result instanceof Promise) {
+                    result.then(function(value) {
+                        callbacks['resolved'](value);
+                    }, function(value) {
+                        callbacks['rejected'](value);
+                    });
+                } else {
+                    callbacks['resolved'](result);
+                }
+                return;
+            }
+            callbacks[status](value);
         };
 
-        var PromiseShell = function(callbacks, status, value) {
-            //若当前处理环节缺失，则向下传递(冒泡)
-            if (typeof this[status] !== 'function') {
-                return callbacks[status](value);
-            };
-            // 执行处理环节
-            var result = this[status](value);
-            // 若返回值是Promise对象则需要等待其完成后继续下一环节
-            if (result instanceof Promise) {
-                result.then(function(value) {
-                    callbacks['resolved'](value);
-                }, function(value) {
-                    callbacks['rejected'](value);
-                });
-            } else {
-                // 若是普通值则传递到下一环节
-                callbacks['resolved'](result);
+        // 监控模版
+        var PromiseMonitor = function(queue, callbacks, status, value) {
+            if (this.status !== 'pending') {
+                return;
+            }
+            status = 'resolved';
+            var result = [];
+            queue.every(function(i) {
+                if (i['[[PromiseStatus]]'] == 'resolved') {
+                    result.push(i['[[PromiseValue]]']);
+                    return true;
+                } else {
+                    status = i['[[PromiseStatus]]'];
+                    result = i['[[PromiseValue]]'];
+                    return false;
+                }
+            });
+            if (status !== 'pending') {
+                callbacks[this.status = status](result);
             }
         };
-
-        // // 监控模版
-        // var monitor = function(queue, status, value) {
-        //     if (status.status !== 'pending') {
-        //         return;
-        //     } else {
-        //         status.status = checkStatus.call(queue);
-        //         switch (status.status) {
-        //             case 'resolved':
-        //                 status['resolved']();
-        //             case 'rejected':
-        //                 status['rejected']();
-        //         }
-        //     }
-        // };
-        // // 检查队列
-        // var checkStatus = function() {
-        //     var status = 'resolved';
-        //     this.every(function(i) {
-        //         if (i['[[PromiseStatus]]'] == 'resolved') {
-        //             return true;
-        //         } else {
-        //             status = i['[[PromiseStatus]]'];
-        //             return false;
-        //         }
-        //     });
-        //     return status;
-        // };
 
         // shim
         Promise = function(fn) {
@@ -191,38 +194,22 @@ var Promise = undefined;
             Object.defineProperties(me, settings);
             fn && fn(PromiseComplete.bind(this, 'resolved'), PromiseComplete.bind(this, 'rejected'));
         };
-
+        // all
         Promise.all = function(queue) {
             var original = {
                 status: 'pending'
             };
-            var pkg, promise = new Promise(function(resolve, reject){
-                pkg = function(status, value){
-                    //if(original.status ===)
+            var shell, promise = new Promise(function(resolve, reject) {
+                var callbacks = {
+                    resolved: resolve,
+                    rejected: reject
                 };
-                pkg = {
-                    status: 'pending',
-                    resolved: function(value){
-                        if(this.status !== 'pending') {
-                            return ;
-                        } else {
-                             this.status = checkStatus.call(queue);
-                             switch(this.status) {
-
-                             }
-                        }
-                        
-
-                    },
-                    rejected: function(value){
-
-                    }
-                };
+                shell = PromiseMonitor.bind(original, queue, callbacks);
             });
-            queue.forEach(function(i){
+            queue.forEach(function(i) {
                 if (i instanceof Promise) {
                     if (i['[[PromiseStatus]]'] === 'pending') {
-                        i['[[Monitor]]'].push(pkg);
+                        i['[[Monitor]]'].push(shell);
                     }
                 }
             });
@@ -231,24 +218,25 @@ var Promise = undefined;
 
         Promise.prototype = {
             then: function(resolve, reject) {
+                //if(this['[[Super]]'])
                 // 原本的处理
+                var me = this;
                 var original = {
                     resolved: resolve,
                     rejected: reject
                 };
                 // 封装后的处理
-                var pkg, promise = new Promise(function(resolve, reject) {
-                    //回调集
-                    var callbacks = {
+                var shell, promise = new Promise(function(resolve, reject) {
+                    shell = PromiseShell.bind(original);
+                    shell.next = PromiseNext.bind(original, {
                         resolved: resolve,
                         rejected: reject
-                    };
-                    pkg = PromiseShell.bind(original, callbacks);
+                    });
                 });
 
-                this['[[Process]]'].push(pkg);
-                if (this['[[PromiseStatus]]'] != 'pending') {
-                    PromiseExec(this);
+                me['[[Process]]'].push(shell);
+                if (me['[[PromiseStatus]]'] != 'pending') {
+                    PromiseExec(me);
                 }
                 return promise;
             },
