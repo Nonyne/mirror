@@ -17,66 +17,66 @@ var Promise = undefined;
     // Function.prototype.bind shim 
     if (!Function.prototype.bind) {
         Object.defineProperty(Function.prototype, 'bind', accessor(function(context) {
-            var slice = [].slice,
-                args = slice.call(arguments, 1),
-                self = this,
-                nop = function() {},
-                bound = function() {
-                    return self.apply(this instanceof nop ? this : (context || {}),
-                        args.concat(slice.call(arguments)));
-                };
-            nop.prototype = self.prototype;
+            var me = this;
+            var slice = [].slice
+            var args = slice.call(arguments, 1);
+            var nop = function() {};
+            var bound = function() {
+                return me.apply(this instanceof nop ? this : (context || {}),
+                    args.concat(slice.call(arguments)));
+            };
+            nop.prototype = me.prototype;
             bound.prototype = new nop();
             return bound;
         }));
     }
     // Object.observe shim 
+    Object.observe = undefined;
     if (!Object.observe) {
         Object.defineProperty(Object, 'observe', accessor(function(object, callback) {
             if (!object['[[callbacks]]']) {
-                var settings = accessor([]);
-                Object.defineProperty(object, '[[callbacks]]', (settings.writable = true, settings));
+                Object.defineProperty(object, '[[callbacks]]', accessor([]));
             }
             typeof callback == 'function' && object['[[callbacks]]'].push(callback);
             return object;
         }));
 
         /*Object功能支持*/
-        var changeConstructor = function(object, name, value) {
-            if (object[name] != value) {
+        var changeConstructor = function(name, value) {
+            if (this[name] != value) {
                 var change = {
                     type: 'updated',
                     name: name,
-                    oldValue: object[name],
-                    object: object
+                    oldValue: this[name],
+                    object: this
                 };
-                if (object[name] == null) {
-                    change.type = 'new';
-                }
-                if (value == null) {
+                if (value === undefined) {
                     change.type = 'delted';
-                    delete object[name];
-                    return change;
+                    delete this[name];
+                } else if (this[name] === undefined) {
+                    change.type = 'new';
+                    this[name] = value;
+                } else {
+                    this[name] = value;
                 }
-                object[name] = value;
                 return change;
             }
-            return null;
-        }
-
+            return;
+        };
+        //编辑扩展
         Object.defineProperties(Object.prototype, {
             edit: accessor(function(name, value) {
                 var me = this;
                 var changes = [];
                 switch (typeof name) {
                     case 'string':
-                        var change = changeConstructor(me, name, value);
+                        var change = changeConstructor.call(me, name, value);
                         change && changes.push(change);
                         break;
                     case 'object':
                         var keys = Object.keys(name);
                         keys.forEach(function(i) {
-                            var change = changeConstructor(me, i, name[i]);
+                            var change = changeConstructor.call(me, i, name[i]);
                             change && changes.push(change);
                         });
                 }
