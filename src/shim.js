@@ -109,7 +109,15 @@ var Promise = undefined;
 
     // Promise shim
     if (typeof Promise === 'undefined') {
-        // 执行回调函数
+        // 快捷创建
+        var PromiseCreate = function(init, status, value) {
+            var promise = new Promise(init);
+            status && (promise['[[PromiseStatus]]'] = status);
+            value && (promise['[[PromiseValue]]'] = value);
+            return promise;
+        };
+
+        // 执行回调环节
         var PromiseExec = function(promise) {
             var value = promise['[[PromiseValue]]'];
             var status = promise['[[PromiseStatus]]'];
@@ -159,11 +167,11 @@ var Promise = undefined;
         };
 
         // 监控模版
-        var PromiseMonitor = function(queue, callbacks, status, value) {
+        var PromiseMonitorAll = function(queue, callbacks) {
             if (this.status !== 'pending') {
                 return;
             }
-            status = 'resolved';
+            var status = 'resolved';
             var result = [];
             queue.every(function(i) {
                 if (i['[[PromiseStatus]]'] == 'resolved') {
@@ -178,6 +186,21 @@ var Promise = undefined;
             if (status !== 'pending') {
                 callbacks[this.status = status](result);
             }
+        };
+
+        var PromiseMonitorRace = function(queue, callbacks) {
+            var me = this;
+            if (me.status !== 'pending') {
+                return;
+            }
+            queue.some(function(i) {
+                if (i['[[PromiseStatus]]'] !== 'pending') {
+                    var status = i['[[PromiseStatus]]'];
+                    var result = i['[[PromiseValue]]'];
+                    callbacks[me.status = status](result);
+                    return false;
+                }
+            });
         };
 
         // shim
@@ -199,22 +222,51 @@ var Promise = undefined;
             var original = {
                 status: 'pending'
             };
-            var shell, promise = new Promise(function(resolve, reject) {
+            var shell, promise = PromiseCreate(function(resolve, reject) {
                 var callbacks = {
                     resolved: resolve,
                     rejected: reject
                 };
-                shell = PromiseMonitor.bind(original, queue, callbacks);
+                shell = PromiseMonitorAll.bind(original, queue, callbacks);
             });
-            queue.forEach(function(i) {
-                if (i instanceof Promise) {
-                    if (i['[[PromiseStatus]]'] === 'pending') {
-                        i['[[Monitor]]'].push(shell);
-                    }
+            var result = queue.filter(function(i) {
+                if (!(i instanceof Promise)) {
+                    return false;
                 }
+                if (i['[[PromiseStatus]]'] === 'pending') {
+                    return i['[[Monitor]]'].push(shell);
+                }
+            });
+            !result.length && shell();
+            return promise;
+        };
+        // race
+        Promise.race = function(queue) {
+            var original = {
+                status: 'pending'
+            };
+            var shell, promise = PromiseCreate(function(resolve, reject) {
+                var callbacks = {
+                    resolved: resolve,
+                    rejected: reject
+                };
+                shell = PromiseMonitorRace.bind(original, queue, callbacks);
+                queue.every(function(i) {
+                    if (!(i instanceof Promise)) {
+                        return true;
+                    }
+                    if (i['[[PromiseStatus]]'] === 'pending') {
+                        return i['[[Monitor]]'].push(shell);
+                    } else {
+                        callbacks[original.status = i['[[PromiseStatus]]']](i['[[PromiseValue]]']);
+                        return false;
+                    }
+                });
             });
             return promise;
         };
+        Promise.resolve = PromiseCreate.bind(Promise, null, 'resolved');
+        Promise.reject = PromiseCreate.bind(Promise, null, 'rejected');
 
         Promise.prototype = {
             then: function(resolve, reject) {
@@ -226,7 +278,7 @@ var Promise = undefined;
                     rejected: reject
                 };
                 // 封装后的处理
-                var shell, promise = new Promise(function(resolve, reject) {
+                var shell, promise = PromiseCreate(function(resolve, reject) {
                     shell = PromiseShell.bind(original);
                     shell.next = PromiseNext.bind(original, {
                         resolved: resolve,
