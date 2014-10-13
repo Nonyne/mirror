@@ -267,7 +267,6 @@ var Promise = undefined;
         };
         Promise.resolve = PromiseCreate.bind(Promise, null, 'resolved');
         Promise.reject = PromiseCreate.bind(Promise, null, 'rejected');
-
         Promise.prototype = {
             then: function(resolve, reject) {
                 //if(this['[[Super]]'])
