@@ -75,6 +75,13 @@ var Mirror = function() {
         }
         svg ? (cls.baseVal = value) : (node.className = value)
     }
+    // 遍历处理节点
+    function traverseNode(node, fun) {
+        fun(node);
+        slice.call(node.childNodes).forEach(function(i) {
+            traverseNode(i, fun);
+        });
+    }
 
     // 公用对象
     var $ = window['$'] = function(selector, context) {
@@ -315,6 +322,58 @@ var Mirror = function() {
         }
     };
 
+    ['after', 'prepend', 'before', 'append'].forEach(function(attr, index) {
+        var inside = index % 2 //=> prepend, append;
+        $.fn[attr] = function() {
+            var nodes = $.map(arguments, function(i, index) {
+                var type = $.type(i);
+                switch (type) {
+                    case 'array':
+                    case 'node':
+                        return i;
+                    default:
+                        return $(i);
+                }
+            });
+            var copy = this.length > 1;
+            var parent, target;
+
+            return this.each(function() {
+                parent = inside ? this : this.parentNode;
+                target = index == 0 ? this.nextSibling :
+                    index == 1 ? this.firstChild :
+                    index == 2 ? this : null;
+                var parentInDocument = $.contains(document.documentElement, parent);
+
+                nodes.forEach(function(node) {
+                    if (copy) {
+                        node = node.cloneNode(true);
+                    } else if (!parent) {
+                        return $(node).remove();
+                    }
+
+                    parent.insertBefore(node, target)
+                    if (parentInDocument) {
+                        traverseNode(node, function(el) {
+                            if (el.nodeName != null && el.nodeName.toUpperCase() === 'SCRIPT' && (!el.type || el.type === 'text/javascript') && !el.src) {
+                                window['eval'].call(window, el.innerHTML);
+                            }
+                        });
+                    }
+                });
+
+            });
+        };
+        // after    => insertAfter
+        // prepend  => prependTo
+        // before   => insertBefore
+        // append   => appendTo
+        $.fn[inside ? attr + 'To' : 'insert' + (index ? 'Before' : 'After')] = function(html) {
+            $(html)[attr](this);
+            return this;
+        };
+    });
+
     // 原型判断
     $.is = function(object) {
         return object instanceof mirror.proto;
@@ -471,7 +530,7 @@ var Mirror = function() {
             return mirror.proto(nodes, selector);
         },
         querySelectorAll: function(node, selector) {
-            switch($.type(node)){
+            switch ($.type(node)) {
                 case 'element':
                 case 'document':
                     return slice.call(node.querySelectorAll(selector));

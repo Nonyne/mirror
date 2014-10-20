@@ -1,6 +1,5 @@
-var Promise = undefined;
+var Promise;
 (function() {
-    'use strict';
     //属性访问特性
     var attributes = {
         writable: false,
@@ -30,8 +29,7 @@ var Promise = undefined;
             return bound;
         }));
     }
-    // Object.observe shim 
-    Object.observe = undefined;
+    // Object.observe shim
     if (!Object.observe) {
         Object.defineProperty(Object, 'observe', accessor(function(object, callback) {
             if (!object['[[callbacks]]']) {
