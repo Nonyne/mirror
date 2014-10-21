@@ -30,18 +30,28 @@ var Promise;
         }));
     }
     // Object.observe shim
+    Object.observe = undefined;
     if (!Object.observe) {
-        Object.defineProperty(Object, 'observe', accessor(function(object, callback) {
-            if (!object['[[callbacks]]']) {
-                Object.defineProperty(object, '[[callbacks]]', accessor([]));
-            }
-            typeof callback == 'function' && object['[[callbacks]]'].push(callback);
-            return object;
-        }));
+        Object.defineProperties(Object, {
+            observe: accessor(function(object, callback) {
+                if (!object['[[callbacks]]']) {
+                    Object.defineProperty(object, '[[callbacks]]', accessor([]));
+                }
+                typeof callback == 'function' && object['[[callbacks]]'].push(callback);
+                return object;
+            }),
+            unobserve: accessor(function(object, callback) {
+                var index, cbs = object['[[callbacks]]'];
+                if (cbs) {
+                    (index = cbs.indexOf(callback)) !== -1 && cbs.splice(index, 1);
+                }
+                return object;
+            })
+        });
 
         /*Object功能支持*/
         var changeConstructor = function(name, value) {
-            if (this[name] != value) {
+            if (this[name] !== value) {
                 var change = {
                     type: 'updated',
                     name: name,

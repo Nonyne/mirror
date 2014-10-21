@@ -1,3 +1,340 @@
+var Promise;
+(function() {
+    //属性访问特性
+    var attributes = {
+        writable: false,
+        enumerable: false,
+        configurable: false
+    };
+    //属性访问器
+    var accessor = function(value, attrs) {
+        var result = Object.create(attrs || attributes);
+        result.value = value;
+        return result;
+    };
+
+    // Function.prototype.bind shim 
+    if (!Function.prototype.bind) {
+        Object.defineProperty(Function.prototype, 'bind', accessor(function(context) {
+            var me = this;
+            var slice = [].slice
+            var args = slice.call(arguments, 1);
+            var nop = function() {};
+            var bound = function() {
+                return me.apply(this instanceof nop ? this : (context || {}),
+                    args.concat(slice.call(arguments)));
+            };
+            nop.prototype = me.prototype;
+            bound.prototype = new nop();
+            return bound;
+        }));
+    }
+    // Object.observe shim
+    Object.observe = undefined;
+    if (!Object.observe) {
+        Object.defineProperties(Object, {
+            observe: accessor(function(object, callback) {
+                if (!object['[[callbacks]]']) {
+                    Object.defineProperty(object, '[[callbacks]]', accessor([]));
+                }
+                typeof callback == 'function' && object['[[callbacks]]'].push(callback);
+                return object;
+            }),
+            unobserve: accessor(function(object, callback) {
+                var index, cbs = object['[[callbacks]]'];
+                if (cbs) {
+                    (index = cbs.indexOf(callback)) !== -1 && cbs.splice(index, 1);
+                }
+                return object;
+            })
+        });
+
+        /*Object功能支持*/
+        var changeConstructor = function(name, value) {
+            if (this[name] !== value) {
+                var change = {
+                    type: 'updated',
+                    name: name,
+                    oldValue: this[name],
+                    object: this
+                };
+                if (value === undefined) {
+                    change.type = 'delted';
+                    delete this[name];
+                } else if (this[name] === undefined) {
+                    change.type = 'new';
+                    this[name] = value;
+                } else {
+                    this[name] = value;
+                }
+                return change;
+            }
+            return;
+        };
+        //编辑扩展
+        Object.defineProperties(Object.prototype, {
+            edit: accessor(function(name, value) {
+                var me = this;
+                var changes = [];
+                switch (typeof name) {
+                    case 'string':
+                        var change = changeConstructor.call(me, name, value);
+                        change && changes.push(change);
+                        break;
+                    case 'object':
+                        var keys = Object.keys(name);
+                        keys.forEach(function(i) {
+                            var change = changeConstructor.call(me, i, name[i]);
+                            change && changes.push(change);
+                        });
+                }
+                if (changes.length && me['[[callbacks]]']) {
+                    me['[[callbacks]]'].forEach(function(callback) {
+                        callback.call(me, changes);
+                    });
+                }
+                return this;
+            })
+        });
+    } else {
+        Object.defineProperties(Object.prototype, {
+            edit: accessor(function(name, value) {
+                var me = this;
+                switch (typeof name) {
+                    case 'string':
+                        this[name] = value;
+                        break;
+                    case 'object':
+                        var keys = Object.keys(name);
+                        keys.forEach(function(i) {
+                            this[i] = name[i];
+                        });
+                }
+                return this;
+            })
+        });
+    }
+
+    // Promise shim
+    if (typeof Promise === 'undefined') {
+        // 快捷创建
+        var PromiseCreate = function(init, status, value) {
+            var promise = new Promise(init);
+            status && (promise['[[PromiseStatus]]'] = status);
+            value && (promise['[[PromiseValue]]'] = value);
+            return promise;
+        };
+
+        // 执行回调环节
+        var PromiseExec = function(promise) {
+            var value = promise['[[PromiseValue]]'];
+            var status = promise['[[PromiseStatus]]'];
+            promise['[[Process]]'].concat(promise['[[Monitor]]']).forEach(function(i) {
+                i(status, value);
+            });
+            promise['[[Process]]'].forEach(function(i) {
+                setTimeout(function() {
+                    i.next(status, value);
+                });
+            });
+            promise['[[Process]]'].length = promise['[[Monitor]]'].length = 0;
+        };
+        // 异步完成
+        var PromiseComplete = function(status, value) {
+            var me = this;
+            if (me['[[PromiseStatus]]'] !== 'pending') {
+                return;
+            }
+            //更改回调值
+            me['[[PromiseValue]]'] = value;
+            me['[[PromiseStatus]]'] = status;
+            PromiseExec(me);
+        };
+        // then回调壳子
+        var PromiseShell = function(status, value) {
+            if (typeof this[status] === 'function') {
+                return this.result = this[status](value);
+            };
+        };
+        // next回调壳子
+        var PromiseNext = function(callbacks, status, value) {
+            if ('result' in this) {
+                var result = this.result;
+                if (result instanceof Promise) {
+                    result.then(function(value) {
+                        callbacks['resolved'](value);
+                    }, function(value) {
+                        callbacks['rejected'](value);
+                    });
+                } else {
+                    callbacks['resolved'](result);
+                }
+                return;
+            }
+            callbacks[status](value);
+        };
+
+        // 监控模版
+        var PromiseMonitorAll = function(queue, callbacks) {
+            if (this.status !== 'pending') {
+                return;
+            }
+            var status = 'resolved';
+            var result = [];
+            queue.every(function(i) {
+                if (i['[[PromiseStatus]]'] == 'resolved') {
+                    result.push(i['[[PromiseValue]]']);
+                    return true;
+                } else {
+                    status = i['[[PromiseStatus]]'];
+                    result = i['[[PromiseValue]]'];
+                    return false;
+                }
+            });
+            if (status !== 'pending') {
+                callbacks[this.status = status](result);
+            }
+        };
+
+        var PromiseMonitorRace = function(queue, callbacks) {
+            var me = this;
+            if (me.status !== 'pending') {
+                return;
+            }
+            queue.some(function(i) {
+                if (i['[[PromiseStatus]]'] !== 'pending') {
+                    var status = i['[[PromiseStatus]]'];
+                    var result = i['[[PromiseValue]]'];
+                    callbacks[me.status = status](result);
+                    return false;
+                }
+            });
+        };
+
+        // shim
+        Promise = function(fn) {
+            var me = this;
+            var settings, attrs = Object.create(attributes);
+            attrs.writable = true;
+            settings = {
+                '[[PromiseStatus]]': accessor('pending', attrs), //pending resolved rejected
+                '[[PromiseValue]]': accessor(undefined, attrs),
+                '[[Process]]': accessor([]),
+                '[[Monitor]]': accessor([])
+            };
+            Object.defineProperties(me, settings);
+            fn && fn(PromiseComplete.bind(this, 'resolved'), PromiseComplete.bind(this, 'rejected'));
+        };
+        // all
+        Promise.all = function(queue) {
+            var original = {
+                status: 'pending'
+            };
+            var shell, promise = PromiseCreate(function(resolve, reject) {
+                var callbacks = {
+                    resolved: resolve,
+                    rejected: reject
+                };
+                shell = PromiseMonitorAll.bind(original, queue, callbacks);
+            });
+            var result = queue.filter(function(i) {
+                if (!(i instanceof Promise)) {
+                    return false;
+                }
+                if (i['[[PromiseStatus]]'] === 'pending') {
+                    return i['[[Monitor]]'].push(shell);
+                }
+            });
+            !result.length && shell();
+            return promise;
+        };
+        // race
+        Promise.race = function(queue) {
+            var original = {
+                status: 'pending'
+            };
+            var shell, promise = PromiseCreate(function(resolve, reject) {
+                var callbacks = {
+                    resolved: resolve,
+                    rejected: reject
+                };
+                shell = PromiseMonitorRace.bind(original, queue, callbacks);
+                queue.every(function(i) {
+                    if (!(i instanceof Promise)) {
+                        return true;
+                    }
+                    if (i['[[PromiseStatus]]'] === 'pending') {
+                        return i['[[Monitor]]'].push(shell);
+                    } else {
+                        callbacks[original.status = i['[[PromiseStatus]]']](i['[[PromiseValue]]']);
+                        return false;
+                    }
+                });
+            });
+            return promise;
+        };
+        Promise.resolve = PromiseCreate.bind(Promise, null, 'resolved');
+        Promise.reject = PromiseCreate.bind(Promise, null, 'rejected');
+        Promise.prototype = {
+            then: function(resolve, reject) {
+                //if(this['[[Super]]'])
+                // 原本的处理
+                var me = this;
+                var original = {
+                    resolved: resolve,
+                    rejected: reject
+                };
+                // 封装后的处理
+                var shell, promise = PromiseCreate(function(resolve, reject) {
+                    shell = PromiseShell.bind(original);
+                    shell.next = PromiseNext.bind(original, {
+                        resolved: resolve,
+                        rejected: reject
+                    });
+                });
+
+                me['[[Process]]'].push(shell);
+                if (me['[[PromiseStatus]]'] != 'pending') {
+                    PromiseExec(me);
+                }
+                return promise;
+            },
+            catch: function(reject) {
+                return this.then(undefined, reject);
+            }
+        };
+    }
+}());
+var define, require;
+(function() {
+    var moduleMap = {};
+    var featureMap = {};
+    var callbackMap = {};
+
+    define = function(id, feature) {
+        featureMap[require.alias(id)] = feature;
+    };
+
+    require = function(id) {
+        id = require.alias(id);
+        var module = moduleMap[id];
+        if (module) {
+            return module.exports
+        }
+
+        var feature = featureMap[id];
+        module = moduleMap[id] = {
+            exports: {}
+        };
+
+        var result = (typeof feature == 'function') ? feature.call(module, require, module.exports, module) : feature;
+        if (result) {
+            module.exports = result;
+        }
+        return module.exports;
+    };
+    require.alias = require.alias = function(id) {return id};
+}());
 var Mirror = function() {
     var emptyArray = [];
     var some = emptyArray.some;
@@ -690,3 +1027,236 @@ var Mirror = function() {
     /* mirror.proto.prototype = $.fn; */
     return $;
 }();
+;(function($) {
+    var slice = Array.prototype.slice;
+    var returnTrue = function() {
+        return true
+    };
+    var returnFalse = function() {
+        return false
+    };
+    // 句柄缓存
+    var _mid = 1;
+    function mid(target) {
+        return target._mid || (target._mid = _mid++);
+    }
+    // 句柄模型
+    function parse(event) {
+        return {
+            e: event
+        };
+    }
+    // 句柄查询
+    var handlers = window['handlers'] = {};
+    function findHandlers(node, event, fn, selector) {
+        var ev = parse(event);
+        return (handlers[mid(node)] || []).filter(function(handler) {
+            return (!ev.e || handler.e == ev.e) && (!fn || handler.fn === fn) && (!selector || handler.selector == selector);
+        });
+    }
+
+    var focusinSupported = 'onfocusin' in window;
+    var focus = {
+        focus: 'focusin',
+        blur: 'focusout'
+    };
+    var hover = {
+        mouseenter: 'mouseover',
+        mouseleave: 'mouseout'
+    };
+    var eventMethods = {
+        preventDefault: 'isDefaultPrevented',
+        stopImmediatePropagation: 'isImmediatePropagationStopped',
+        stopPropagation: 'isPropagationStopped'
+    };
+
+    function realEvent(type) {
+        return hover[type] || (focusinSupported && focus[type]) || type;
+    }
+
+    function eventCapture(handler, captureSetting) {
+        return handler.del && (!focusinSupported && (handler.e in focus)) || !!captureSetting;
+    }
+
+    function compatible(event, source) {
+        if (source || !event.isDefaultPrevented) {
+            source || (source = event)
+            $.each(eventMethods, function(name, predicate) {
+                var sourceMethod = source[name]
+                event[name] = function() {
+                    this[predicate] = returnTrue
+                    return sourceMethod && sourceMethod.apply(source, arguments)
+                }
+                event[predicate] = returnFalse
+            })
+
+            if (source.defaultPrevented !== undefined ? source.defaultPrevented :
+                'returnValue' in source ? source.returnValue === false :
+                source.getPreventDefault && source.getPreventDefault())
+                event.isDefaultPrevented = returnTrue
+        }
+        return event
+    }
+    // 添加事件句柄
+    function addHandler(node, events, fn, data, selector, delegator, capture) {
+        var id = mid(node);
+        var handler = handlers[id] || (handlers[id] = []);
+        events.split(/\s/).forEach(function(event) {
+            if (event == 'ready') {
+                return $(document).ready(fn);
+            }
+            var ev = parse(event);
+            ev.fn = fn;
+            ev.selector = selector;
+            if (ev.e in hover) {
+                fn = function() {
+                    var related = e.relatedTarget;
+                    if (!related || (related !== this && !$.contains(this, related))) {
+                        return handler.fn.apply(this, arguments)
+                    }
+                }
+            }
+            // handler.del = delegator;
+            var callback = delegator || fn;
+            ev.proxy = function(e) {
+                e = compatible(e);
+                if (e.isImmediatePropagationStopped()) {
+                    return;
+                }
+                e.data = data;
+                var result = callback.apply(node, e._args == undefined ? [e] : [e].concat(e._args));
+                if (result === false) {
+                    e.preventDefault(), e.stopPropagation()
+                }
+                return result;
+            }
+            ev.i = handler.length;
+            handler.push(ev);
+            if ('addEventListener' in node) {
+                node.addEventListener(realEvent(ev.e), ev.proxy, eventCapture(ev, capture))
+            }
+        });
+    }
+    // 移除事件句柄
+    function removeHandler(node, events, fn, selector, capture) {
+        var id = mid(node);
+        (events || '').split(/\s/).forEach(function(event) {
+            findHandlers(node, event, fn, selector).forEach(function(handler) {
+                delete handlers[id][handler.i]
+                if ('removeEventListener' in node) {
+                    node.removeEventListener(realEvent(handler.e), handler.proxy, eventCapture(handler, capture));
+                }
+            })
+        })
+    }
+
+    // event proxy
+    function createProxy(e) {
+        var proxy = {
+            originalEvent: event
+        };
+        Object.keys(e).forEach(function(i) {
+            proxy[i] = e[i];
+        });
+        return proxy;
+    };
+    // extend method
+    $.extend($.fn, {
+        on: function(event, selector, data, fn, one) {
+            var me = this;
+            var autoRemove, delegator;
+            var eventType = $.type(event);
+            // 没有selector
+            if ($.type(selector) !== 'string' && $.type(fn) !== 'function' && fn !== false) {
+                fn = data, data = selector, selector = undefined;
+            }
+            // 没有data
+            if ($.type(data) == 'function' || data === false) {
+                fn = data, data = undefined;
+            }
+            // 停止冒泡
+            if (fn === false) {
+                fn = returnFalse;
+            }
+            // 增加事件
+            return me.each(function(index, node) {
+                // 自动移除
+                if (one) {
+                    autoRemove = function(e) {
+                        removeHandler(node, e.type, fn);
+                        return fn.apply(this, arguments);
+                    }
+                }
+                // 委托
+                if (selector) {
+                    delegator = function(e) {
+                        var ev, match = $(e.target).closest(selector, node).get(0);
+                        if (match && match !== node) {
+                            ev = $.extend(createProxy(e), {
+                                currentTarget: match,
+                                liveFired: node
+                            });
+                            return (autoRemove || fn).apply(match, [ev].concat(slice.call(arguments, 1)))
+                        }
+                    }
+                }
+                addHandler(node, event, fn, data, selector, delegator || autoRemove);
+            });
+        },
+        off: function(event, selector, fn) {
+            var me = this;
+            var eventType = $.type(event);
+            // 没有selector
+            if ($.type(selector) !== 'string' && $.type(fn) !== 'function' && fn !== false) {
+                fn = selector, selector = undefined;
+            }
+            // 停止冒泡
+            if (fn === false) {
+                fn = returnFalse;
+            }
+            // 移除事件
+            return me.each(function() {
+                removeHandler(this, event, fn, selector);
+            });
+        }
+    });
+}(Mirror));
+;(function($) {
+    var index = 0;
+    $.getJSON = function(url, params, done, fail) {
+        if ($.type(params) === 'function' && fail === undefined) {
+            fail = done;
+            done = params;
+            params = undefined;
+        }
+
+        if ($.type(params) == 'object') {
+            var paramStack = [];
+            Object.keys(params).forEach(function(i) {
+                paramStack.push(i + '=' + params[i]);
+            });
+            url += (url.indexOf('?') == -1 ? '?' : '&') + paramStack.join('&');
+        }
+
+        var promise = new Promise(function(resolve, reject) {
+            var callbackName = 'jsonp' + index++;
+            var replaceIndex = url.indexOf('?', url.indexOf('?') + 1);
+            if (replaceIndex != -1) {
+                url = url.substring(0, replaceIndex) + callbackName + url.substring(replaceIndex + 1);
+                window[callbackName] = resolve;
+            }
+            var head = document.head;
+            var script = document.createElement('script');
+            script.onload = script.onerror = function(e) {
+                e.type == 'error' && reject(e);
+                script.onload = script.onerror = null;
+                delete window[callbackName];
+                head.removeChild(script);
+            }
+            script.type = 'text/javascript';
+            script.src = url;
+            head.appendChild(script);
+        });
+        return promise;
+    }
+}(Mirror));
