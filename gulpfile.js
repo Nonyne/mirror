@@ -22,6 +22,7 @@ gulp.task("build", ["clear"], function() {
         "src/mirror.js",
         "src/event.js",
         "src/ajax.js",
+        "src/css.js",
         "!**/_*.*"
     ];
     gulp.src(files)

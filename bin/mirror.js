@@ -391,10 +391,10 @@ var Mirror = function() {
         return selector == null ? $(nodes) : $(nodes).filter(selector)
     }
     // 取子节点
-    function children(element) {
-        return 'children' in element ?
-            slice.call(element.children) :
-            $.map(element.childNodes, function(node) {
+    function children(node) {
+        return 'children' in node ?
+            slice.call(node.children) :
+            $.map(node.childNodes, function(node) {
                 if (node.nodeType == 1) return node
             })
     }
@@ -663,15 +663,15 @@ var Mirror = function() {
                 return;
             }
             if (arguments.length < 2) {
-                var element = me[0];
-                var computedStyle = getComputedStyle(element, '');
+                var node = me[0];
+                var computedStyle = getComputedStyle(node, '');
                 switch (type) {
                     case 'string':
-                        return element.style[camelize(property)] || computedStyle.getPropertyValue(property);
+                        return node.style[camelize(property)] || computedStyle.getPropertyValue(property);
                     case 'array':
                         var props = {}
                         $.each(property, function(index, prop) {
-                            props[prop] = (element.style[camelize(prop)] || computedStyle.getPropertyValue(prop))
+                            props[prop] = (node.style[camelize(prop)] || computedStyle.getPropertyValue(prop))
                         })
                         return props
                 }
@@ -766,14 +766,7 @@ var Mirror = function() {
         var inside = index % 2 //=> prepend, append;
         $.fn[attr] = function() {
             var nodes = $.map(arguments, function(i, index) {
-                var type = $.type(i);
-                switch (type) {
-                    case 'array':
-                    case 'node':
-                        return i;
-                    default:
-                        return $(i);
-                }
+                return $(i);
             });
             var copy = this.length > 1;
             var parent, target;
@@ -833,7 +826,7 @@ var Mirror = function() {
                         case 9:
                             return 'document';
                         case 1:
-                            return 'element';
+                            return 'node';
                     }
                 } else {
                     return toString.call(target).replace(/^\[object (\w+)\]$/, '$1').toLowerCase();
@@ -949,10 +942,6 @@ var Mirror = function() {
                 case 'array':
                     nodes = compact(selector), selector = null;
                     break;
-                case 'object':
-                case 'element':
-                    nodes = [selector], selector = null;
-                    break;
                 case 'nodelist':
                     nodes = slice.call(selector), selector = null;
                     break;
@@ -966,12 +955,14 @@ var Mirror = function() {
                         nodes = mirror.querySelectorAll(document, selector);
                     }
                     break;
+                default:
+                    nodes = [selector], selector = null;
             }
             return mirror.proto(nodes, selector);
         },
         querySelectorAll: function(node, selector) {
             switch ($.type(node)) {
-                case 'element':
+                case 'node':
                 case 'document':
                     return slice.call(node.querySelectorAll(selector));
             }
@@ -1259,4 +1250,37 @@ var Mirror = function() {
         });
         return promise;
     }
+}(Mirror));
+;(function($) {
+
+    var stylesheets = {};
+
+    var css = function(name){
+        this.name = name;
+        this.stylesheet = $('<style></style>').appendTo('head');
+    }
+    css.prototype = {
+        append: function(style){
+            this.stylesheet.append(document.createTextNode(style));
+            return this;
+        },
+        write: function(style){
+            this.stylesheet.html(style);
+            return this;
+        },
+        disable: function(value){
+            this.stylesheet.get(0).disabled = value === undefined || !!value;
+            return this;
+        },
+        remove: function(){
+            this.stylesheet.remove();
+            delete stylesheets[this.name];
+        }
+    }
+
+    $.css = function(name) {
+        name = name || 'default';
+        return stylesheets[name] || (stylesheets[name] = new css(name));
+    };
+
 }(Mirror));
