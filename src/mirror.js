@@ -212,7 +212,6 @@ var Mirror = function() {
             }))
         },
         find: function(selector) {
-            console.log(selector)
             var result, me = this;
             switch ($.type(selector)) {
                 case 'undefined':
@@ -235,7 +234,7 @@ var Mirror = function() {
                         });
                     }
             }
-            return uniq(result);
+            return $(uniq(result));
         },
         closest: function(selector, context) {
             var node = this[0];
