@@ -18,7 +18,6 @@ var include = require("gulp-file-include");
 gulp.task("build", ["clear"], function() {
     var files = [
         "src/shim.js",
-        "src/require.js",
         "src/mirror.js",
         "src/event.js",
         "src/ajax.js",

@@ -1,5 +1,4 @@
-;
-(function($) {
+;(function($) {
     $.ajax = function(settings) {
         // 配置合并
         settings = $.extend({
@@ -13,7 +12,7 @@
         }, settings);
 
         // Get请求处理
-        if (settings.type. === 'get') {
+        if (settings.type === 'get') {
             // 参数处理
             if (typeof settings.data == 'object') {
                 var query = url.indexOf('?');
