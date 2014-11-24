@@ -10,7 +10,7 @@
             context: window,
             timeout: 0
         }, settings);
-
+        var url = settings.url;
         // Get请求处理
         if (settings.type === 'get') {
             // 参数处理
@@ -21,10 +21,11 @@
                     paramStack.push(i + '=' + settings.data[i]);
                 });
                 url += (query == -1 ? '?' : '&') + paramStack.join('&');
+                var isJSONP = url.indexOf('?', url.indexOf('?')) != -1;
             }
             // JSONP处理
-            if (settings.dataType == 'jsonp') {
-                return $.getScript(settings.url, settings.success, settings.error);
+            if (settings.dataType == 'jsonp' || isJSONP) {
+                return $.getScript(url, settings.success, settings.error);
             }
         }
 
@@ -81,15 +82,15 @@
                     });
                 }, settings.timeout);
             }
-            xhr.open(settings.type, settings.url, settings.async);
+            xhr.open(settings.type, url, settings.async);
             xhr.send(settings.data ? settings.data : null);
         });
 
-        if (typeof done === 'function') {
-            promise.then(done);
+        if (typeof settings.success === 'function') {
+            promise.then(settings.success);
         }
-        if (typeof fail === 'function') {
-            promise.then(undefined, fail);
+        if (typeof settings.error === 'function') {
+            promise.then(undefined, settings.error);
         }
         return promise;
     };
@@ -142,7 +143,10 @@
         }
 
         return $.ajax({
-
+            url: url,
+            data: params,
+            success: done,
+            error: fail
         });
     };
 }(Mirror));
