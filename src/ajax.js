@@ -144,6 +144,7 @@
 
         return $.ajax({
             url: url,
+            dataType: 'json',
             data: params,
             success: done,
             error: fail
