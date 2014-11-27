@@ -87,7 +87,7 @@
             }
             xhr.open(settings.type, url, settings.async);
             if (settings.contentType || (settings.contentType !== false && settings.data && type != 'GET')) {
-                setHeader('Content-Type', settings.contentType || 'application/x-www-form-urlencoded');
+                xhr.setRequestHeader('Content-Type', settings.contentType || 'application/x-www-form-urlencoded');
             }
             xhr.send(settings.data ? settings.data : null);
         });
