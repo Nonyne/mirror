@@ -2,8 +2,8 @@
     $.ajax = function(settings) {
         // 配置合并
         settings = $.extend({
-            type: 'get',
-            dataType: 'text',
+            type: 'GET',
+            dataType: 'TEXT',
             url: location.href,
             async: true,
             data: {},
@@ -11,8 +11,10 @@
             timeout: 0
         }, settings);
         var url = settings.url;
+        var type = settings.type.toUpperCase();
+        var dataType = settings.dataType.toUpperCase();
         // Get请求处理
-        if (settings.type === 'get') {
+        if (type === 'GET') {
             // 参数处理
             if (typeof settings.data == 'object') {
                 var query = url.indexOf('?');
@@ -20,11 +22,12 @@
                 Object.keys(settings.data).forEach(function(i) {
                     paramStack.push(i + '=' + settings.data[i]);
                 });
+                delete settings.data;
                 url += (query == -1 ? '?' : '&') + paramStack.join('&');
                 var isJSONP = url.indexOf('?', url.indexOf('?')) != -1;
             }
             // JSONP处理
-            if (settings.dataType == 'jsonp' || isJSONP) {
+            if (dataType == 'JSONP' || isJSONP) {
                 return $.getScript(url, settings.success, settings.error);
             }
         }
@@ -42,14 +45,14 @@
                         var error = false;
                         var result = xhr.responseText;
                         try {
-                            switch (settings.dataType) {
-                                case 'script':
+                            switch (dataType) {
+                                case 'SCRIPT':
                                     (1, eval)(result);
                                     break;
-                                case 'xml':
+                                case 'XML':
                                     result = xhr.responseXML
                                     break;
-                                case 'json':
+                                case 'JSON':
                                     result = JSON.parse(result);
                             }
                         } catch (e) {
@@ -83,6 +86,9 @@
                 }, settings.timeout);
             }
             xhr.open(settings.type, url, settings.async);
+            if (settings.contentType || (settings.contentType !== false && settings.data && type != 'GET')) {
+                setHeader('Content-Type', settings.contentType || 'application/x-www-form-urlencoded');
+            }
             xhr.send(settings.data ? settings.data : null);
         });
 
