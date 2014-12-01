@@ -8,79 +8,94 @@ var Mirror = function() {
     var methodAttributes = ['val', 'css', 'html', 'text', 'data', 'width', 'height', 'offset'];
     // 紧密化数组
     function compact(array) {
-        return filter.call(array, function(item) {
-            return item !== null;
-        });
-    }
-    // 扁平化数组
-    function flatten(array) {
-        return array.length > 0 ? concat.apply([], array) : array;
-    }
-    // 去除重复
-    function uniq(array) {
-        return filter.call(array, function(item, idx) {
-            return array.indexOf(item) == idx
-        });
-    }
-    // 混入对象
-    function mix(target, source, deep) {
-        var keys = Object.keys(source);
-        keys.forEach(function(key) {
-            var type = $.type(source[key]),
-                temp;
-            switch (type) {
-                case 'undefined':
-                    break;
-                case 'array':
-                    temp = [];
-                case 'object':
-                    temp = temp || {};
-                    if (deep) {
-                        mix(target[key] = temp, source[key], deep);
-                        break;
-                    }
-                default:
-                    target[key] = source[key];
-            }
-        });
-        return target;
-    }
-    // 函数化参数处理
-    function fnArgument(context, fn, idx, payload) {
-        return $.type(fn) === 'function' ? fn.call(context, idx, payload) : fn;
-    }
-    // 选择器参数过滤
-    function filtered(nodes, selector) {
-        return selector == null ? $(nodes) : $(nodes).filter(selector)
-    }
-    // 取子节点
-    function children(node) {
-        return 'children' in node ?
-            slice.call(node.children) :
-            $.map(node.childNodes, function(node) {
-                if (node.nodeType == 1) return node
-            })
-    }
-    // 设置属性
-    function setAttribute(node, name, value) {
-        value == null ? node.removeAttribute(name) : node.setAttribute(name, value)
-    }
-    // 样式设置
-    function className(node, value) {
-        var cls = node.className || '',
-            svg = cls && cls.baseVal !== undefined
-
-        if (value === undefined) {
-            return svg ? cls.baseVal : cls
+            return filter.call(array, function(item) {
+                return item !== null;
+            });
         }
-        svg ? (cls.baseVal = value) : (node.className = value)
-    }
-    // 遍历处理节点
+        // 扁平化数组
+    function flatten(array) {
+            return array.length > 0 ? concat.apply([], array) : array;
+        }
+        // 去除重复
+    function uniq(array) {
+            return filter.call(array, function(item, idx) {
+                return array.indexOf(item) == idx
+            });
+        }
+        // 混入对象
+    function mix(target, source, deep) {
+            var keys = Object.keys(source);
+            keys.forEach(function(key) {
+                var type = $.type(source[key]),
+                    temp;
+                switch (type) {
+                    case 'undefined':
+                        break;
+                    case 'array':
+                        temp = [];
+                    case 'object':
+                        temp = temp || {};
+                        if (deep) {
+                            mix(target[key] = temp, source[key], deep);
+                            break;
+                        }
+                    default:
+                        target[key] = source[key];
+                }
+            });
+            return target;
+        }
+        // 函数化参数处理
+    function fnArgument(context, fn, idx, payload) {
+            return $.type(fn) === 'function' ? fn.call(context, idx, payload) : fn;
+        }
+        // 选择器参数过滤
+    function filtered(nodes, selector) {
+            return selector == null ? $(nodes) : $(nodes).filter(selector)
+        }
+        // 取子节点
+    function children(node) {
+            return 'children' in node ?
+                slice.call(node.children) :
+                $.map(node.childNodes, function(node) {
+                    if (node.nodeType == 1) return node
+                })
+        }
+        // 设置属性
+    function setAttribute(node, name, value) {
+            value == null ? node.removeAttribute(name) : node.setAttribute(name, value)
+        }
+        // 样式设置
+    function className(node, value) {
+            var cls = node.className || '',
+                svg = cls && cls.baseVal !== undefined
+
+            if (value === undefined) {
+                return svg ? cls.baseVal : cls
+            }
+            svg ? (cls.baseVal = value) : (node.className = value)
+        }
+        // 遍历处理节点
     function traverseNode(node, fun) {
         fun(node);
         slice.call(node.childNodes).forEach(function(i) {
             traverseNode(i, fun);
         });
+    }
+
+    var elementDisplay = {};
+
+    function defaultDisplay(nodeName) {
+        var element, display
+        if (!elementDisplay[nodeName]) {
+            element = document.createElement(nodeName)
+            document.body.appendChild(element)
+            display = getComputedStyle(element, '').getPropertyValue("display")
+            element.parentNode.removeChild(element)
+            display == "none" && (display = "block")
+            elementDisplay[nodeName] = display
+        }
+        return elementDisplay[nodeName]
     }
 
     //CSS纯数字属性列表
@@ -96,19 +111,19 @@ var Mirror = function() {
 
     // CSS属性名替换 js to css
     function dasherize(str) {
-        return str.replace(/::/g, '/')
-            .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
-            .replace(/([a-z\d])([A-Z])/g, '$1_$2')
-            .replace(/_/g, '-')
-            .toLowerCase()
-    }
-    // CSS属性名替换 css to js
+            return str.replace(/::/g, '/')
+                .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
+                .replace(/([a-z\d])([A-Z])/g, '$1_$2')
+                .replace(/_/g, '-')
+                .toLowerCase()
+        }
+        // CSS属性名替换 css to js
     function camelize(str) {
-        return str.replace(/-+(.)?/g, function(match, chr) {
-            return chr ? chr.toUpperCase() : ''
-        });
-    }
-    // CSS数值增加px
+            return str.replace(/-+(.)?/g, function(match, chr) {
+                return chr ? chr.toUpperCase() : ''
+            });
+        }
+        // CSS数值增加px
     function maybeAddPx(name, value) {
         return (typeof value == "number" && !cssNumber[dasherize(name)]) ? value + "px" : value
     }
@@ -421,6 +436,19 @@ var Mirror = function() {
                     }
                 });
             });
+        },
+        show: function() {
+            return this.each(function() {
+                var me = $(this);
+                me.attr('hidden') && me.attr('hidden', null);
+                me.css('display') == "none" && me.css('display', '');
+                if (getComputedStyle(this, '').getPropertyValue("display") == "none") {
+                    me.css('display', defaultDisplay(this.nodeName));
+                }
+            });
+        },
+        hide: function() {
+            return this.attr('hidden', true);
         }
     };
 
@@ -529,16 +557,16 @@ var Mirror = function() {
     };
     // 映射对象
     $.map = function(target, fn) {
-        var value, values = [];
-        $.each(target, function(index, i) {
-            var value = fn(i, index, target);
-            if (value != null) {
-                values.push(value);
-            }
-        });
-        return flatten(values);
-    }
-    // 扩展对象
+            var value, values = [];
+            $.each(target, function(index, i) {
+                var value = fn(i, index, target);
+                if (value != null) {
+                    values.push(value);
+                }
+            });
+            return flatten(values);
+        }
+        // 扩展对象
     $.extend = function(target) {
         var deep, args = slice.call(arguments, 1);
         if (typeof target == 'boolean') {
@@ -555,12 +583,12 @@ var Mirror = function() {
     $.contains = document.documentElement.contains ?
         function(parent, node) {
             return parent !== node && parent.contains(node)
-    } :
+        } :
         function(parent, node) {
             while (node && (node = node.parentNode))
                 if (node === parent) return true
             return false
-    }
+        }
 
     // HTML片段构造
     var fragmentRE = /^\s*<(\w+|!)[^>]*>/;
