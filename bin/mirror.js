@@ -1217,24 +1217,25 @@ var Mirror = function() {
             dataType: 'TEXT',
             url: location.href,
             async: true,
-            data: {},
             context: window,
             timeout: 0
         }, settings);
         var url = settings.url;
         var type = settings.type.toUpperCase();
         var dataType = settings.dataType.toUpperCase();
+        var paramStack = [];
+        if(typeof settings.data == 'object') {
+            Object.keys(settings.data).forEach(function(i) {
+                paramStack.push(i + '=' + settings.data[i]);
+            });
+            delete settings.data;
+        }
+
         // Get请求处理
         if (type === 'GET') {
             // 参数处理
             if (typeof settings.data == 'object') {
-                var query = url.indexOf('?');
-                var paramStack = [];
-                Object.keys(settings.data).forEach(function(i) {
-                    paramStack.push(i + '=' + settings.data[i]);
-                });
-                delete settings.data;
-                url += (query == -1 ? '?' : '&') + paramStack.join('&');
+                url += (url.indexOf('?') == -1 ? '?' : '&') + paramStack.join('&');
                 var isJSONP = url.indexOf('?', url.indexOf('?')) != -1;
             }
             // JSONP处理
@@ -1300,7 +1301,7 @@ var Mirror = function() {
             if (settings.contentType || (settings.contentType !== false && settings.data && type != 'GET')) {
                 xhr.setRequestHeader('Content-Type', settings.contentType || 'application/x-www-form-urlencoded');
             }
-            xhr.send(settings.data ? settings.data : null);
+            xhr.send(paramStack.length ? paramStack.join('&') : null);
         });
 
         if (typeof settings.success === 'function') {
