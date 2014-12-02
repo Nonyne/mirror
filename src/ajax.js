@@ -2,31 +2,30 @@
     $.ajax = function(settings) {
         // 配置合并
         settings = $.extend({
-            type: 'GET',
-            dataType: 'TEXT',
             url: location.href,
             async: true,
-            context: window,
+            type: 'GET',
+            dataType: 'TEXT',
+            contentType: 'application/x-www-form-urlencoded',
             timeout: 0
         }, settings);
         var url = settings.url;
         var type = settings.type.toUpperCase();
         var dataType = settings.dataType.toUpperCase();
-        var paramStack = [];
+        // 参数处理
         if(typeof settings.data == 'object') {
+            var paramStack = [];
             Object.keys(settings.data).forEach(function(i) {
                 paramStack.push(i + '=' + settings.data[i]);
             });
-            delete settings.data;
+            settings.data = paramStack.join('&');
         }
 
         // Get请求处理
         if (type === 'GET') {
             // 参数处理
-            if (typeof settings.data == 'object') {
-                url += (url.indexOf('?') == -1 ? '?' : '&') + paramStack.join('&');
-                var isJSONP = url.indexOf('?', url.indexOf('?')) != -1;
-            }
+            url += (url.indexOf('?') == -1 ? '?' : '&') + settings.data;
+            var isJSONP = url.indexOf('?', url.indexOf('?')) != -1;
             // JSONP处理
             if (dataType == 'JSONP' || isJSONP) {
                 return $.getScript(url, settings.success, settings.error);
@@ -88,9 +87,10 @@
             }
             xhr.open(settings.type, url, settings.async);
             if (settings.contentType || (settings.contentType !== false && settings.data && type != 'GET')) {
-                xhr.setRequestHeader('Content-Type', settings.contentType || 'application/x-www-form-urlencoded');
+                xhr.setRequestHeader('Content-Type', settings.contentType);
             }
-            xhr.send(paramStack.length ? paramStack.join('&') : null);
+
+            xhr.send(settings.data);
         });
 
         if (typeof settings.success === 'function') {
