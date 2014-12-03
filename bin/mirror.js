@@ -1235,8 +1235,10 @@ var Mirror = function() {
         // Get请求处理
         if (type === 'GET') {
             // 参数处理
-            url += (url.indexOf('?') == -1 ? '?' : '&') + settings.data;
-            var isJSONP = url.indexOf('?', url.indexOf('?')) != -1;
+            if(settings.data) {
+                url += (url.indexOf('?') == -1 ? '?' : '&') + settings.data;
+            }
+            var isJSONP = url.indexOf('?', url.indexOf('?') + 1) != -1;
             // JSONP处理
             if (dataType == 'JSONP' || isJSONP) {
                 return $.getScript(url, settings.success, settings.error);
