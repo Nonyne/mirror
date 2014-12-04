@@ -503,6 +503,7 @@ var Mirror = function() {
                         excludes = this.filter(selector);
                         break;
                     case 'nodelist':
+                    case 'htmlcollection':
                         excludes = slice.call(selector);
                         break;
                     default:
@@ -940,6 +941,7 @@ var Mirror = function() {
                     nodes = compact(selector), selector = null;
                     break;
                 case 'nodelist':
+                case 'htmlcollection':
                     nodes = slice.call(selector), selector = null;
                     break;
                 case 'string':
