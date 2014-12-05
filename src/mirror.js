@@ -6,6 +6,7 @@ var Mirror = function() {
     var concat = emptyArray.concat;
     var filter = emptyArray.filter;
     var methodAttributes = ['val', 'css', 'html', 'text', 'data', 'width', 'height', 'offset'];
+    var rootNodeRE = /^(?:body|html)$/i;
     // 紧密化数组
     function compact(array) {
             return filter.call(array, function(item) {
@@ -450,8 +451,90 @@ var Mirror = function() {
         },
         hide: function() {
             return this.attr('hidden', true);
+        },
+        position: function() {
+            if (this.length) {
+                var node = this[0];
+                var offsetParent = this.offsetParent(),
+                    offset = this.offset(),
+                    parentOffset = rootNodeRE.test(offsetParent[0].nodeName) ? {
+                        top: 0,
+                        left: 0
+                    } : offsetParent.offset()
+                offset.top -= parseFloat($(node).css('margin-top')) || 0
+                offset.left -= parseFloat($(node).css('margin-left')) || 0
+
+                parentOffset.top += parseFloat($(offsetParent[0]).css('border-top-width')) || 0
+                parentOffset.left += parseFloat($(offsetParent[0]).css('border-left-width')) || 0
+
+                return {
+                    top: offset.top - parentOffset.top,
+                    left: offset.left - parentOffset.left
+                }
+            }
+            return null;
+        },
+        offsetParent: function() {
+            return this.map(function() {
+                var parent = this.offsetParent || document.body
+                while (parent && !rootNodeRE.test(parent.nodeName) && $(parent).css("position") == "static")
+                    parent = parent.offsetParent
+                return parent
+            });
+        },
+        offset: function(coordinates) {
+            if (coordinates) {
+                return this.each(function(index) {
+                    var me = $(this);
+                    var coords = fnArgument(this, coordinates, index, me.offset());
+                    var parentOffset = me.offsetParent().offset();
+                    props = {
+                        top: coords.top - parentOffset.top,
+                        left: coords.left - parentOffset.left
+                    }
+
+                    if (me.css('position') == 'static') {
+                        props['position'] = 'relative';
+                    }
+                    me.css(props);
+                });
+            }
+
+            if (this.length) {
+                var offset = this[0].getBoundingClientRect();
+                return {
+                    top: offset.top + window.pageYOffset,
+                    left: offset.left + window.pageXOffset,
+                    width: Math.round(offset.width),
+                    height: Math.round(offset.height)
+                };
+            }
+            return null;
         }
     };
+
+    ['width', 'height'].forEach(function(dimension) {
+        var dimensionProperty = dimension.replace(/./, function(m) {
+            return m[0].toUpperCase()
+        });
+        $.fn[dimension] = function(value) {
+            var offset, node = this[0];
+            if (value === undefined) {
+                switch ($.type(node)) {
+                    case 'window':
+                        return node['inner' + dimensionProperty];
+                    case 'document':
+                        return node.documentElement['scroll' + dimensionProperty];
+                    default:
+                        return (offset = this.offset()) && offset[dimension];
+                }
+            }
+            return this.each(function(index) {
+                node = $(this);
+                node.css(dimension, fnArgument(this, value, index, node[dimension]()));
+            })
+        }
+    });
 
     ['after', 'prepend', 'before', 'append'].forEach(function(attr, index) {
         var inside = index % 2 //=> prepend, append;
