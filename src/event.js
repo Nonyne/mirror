@@ -139,11 +139,11 @@
             var eventType = $.type(event);
             // 没有selector
             if ($.type(selector) !== 'string' && $.type(fn) !== 'function' && fn !== false) {
-                fn = data, data = selector, selector = undefined;
+                one = fn, fn = data, data = selector, selector = undefined;
             }
             // 没有data
             if ($.type(data) == 'function' || data === false) {
-                fn = data, data = undefined;
+                one = fn, fn = data, data = undefined;
             }
             // 停止冒泡
             if (fn === false) {
