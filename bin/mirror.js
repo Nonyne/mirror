@@ -900,6 +900,8 @@ var Mirror = function() {
             case 'object':
                 if (target === null) {
                     return 'null';
+                } else if (target.window === target) {
+                    return 'window';
                 } else if (Node && target instanceof Node) {
                     switch (target.nodeType) {
                         case 3:
