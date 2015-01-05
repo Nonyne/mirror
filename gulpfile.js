@@ -27,7 +27,9 @@ gulp.task("build", ["clear"], function() {
     gulp.src(files)
         .pipe(include())
         .pipe(concat(conf.name + ".js"))
-        //.pipe(uglify())
+        .pipe(gulp.dest([conf.build].join("/")))
+        .pipe(uglify())
+        .pipe(concat(conf.name + ".min.js"))
         .pipe(gulp.dest([conf.build].join("/")));
 });
 gulp.task("default", ["build"]);
